@@ -1,5 +1,4 @@
 import torch.nn as nn
-import torch
 import math
 
 def conv3x3(in_planes, out_planes, stride=1):
@@ -11,7 +10,7 @@ def conv3x3(in_planes, out_planes, stride=1):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, index=0):
+    def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(BasicBlock, self).__init__()
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = nn.BatchNorm2d(planes)
@@ -20,11 +19,8 @@ class BasicBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(planes)
         self.downsample = downsample
         self.stride = stride
-        #the No. of block in each layer
-        self.index = index
-        print("this is block",index)
 
-    def forward(self, x, drop=None):
+    def forward(self, x):
         residual = x
 
         out = self.conv1(x)
@@ -35,18 +31,11 @@ class BasicBlock(nn.Module):
 
         if self.downsample is not None:
             residual = self.downsample(x)
-            
-        # if no downsampling involved and the index matches 
-        if self.downsample is None and self.index in drop:
-           # only keep the shortcut path
-            print("skip connections", self.index)
-            out = residual 
-        else:
-            out += residual
-            
+
+        out += residual
         out = self.relu(out)
 
-        return out,drop
+        return out
 
 class ResNet(nn.Module):
 
@@ -62,10 +51,7 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(d*4, n, stride=2)
         self.avgpool = nn.AvgPool2d(8, stride=1)
         self.fc = nn.Linear(d*4 * BasicBlock.expansion, num_classes)
-        
-        # record the number of blocks 
-        self.num_block = n
-        
+
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -86,30 +72,25 @@ class ResNet(nn.Module):
         layers.append(BasicBlock(self.inplanes, planes, stride, downsample))
         self.inplanes = planes * BasicBlock.expansion
         for i in range(1, blocks):
-            layers.append(BasicBlock(self.inplanes, planes, index=i))
+            layers.append(BasicBlock(self.inplanes, planes))
 
         return nn.Sequential(*layers)
 
-    def forward(self, x, committee=False):
+    def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        #generate random index of blocks in each layer to skip the connection
-        print("committee is ", committee)
-        if committee == True:
-            #skip the downsample block
-            #drop three blocks at each resolution 
-            drop = torch.randint(1, self.num_block, (3,))
-            print("blocks to drop", drop)
-        else:
-            drop = None
-            
-        x,drop = self.layer1(x,drop)
-        x,drop = self.layer2(x,drop)
-        x,drop = self.layer3(x,drop)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
         return x
+
+
+
+
