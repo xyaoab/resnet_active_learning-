@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+import random
 import math
 
 def conv3x3(in_planes, out_planes, stride=1):
@@ -22,9 +23,10 @@ class BasicBlock(nn.Module):
         self.stride = stride
         #the No. of block in each layer
         self.index = index
-        print("this is block",index)
+        #print("this is block",index)
 
-    def forward(self, x, drop=None):
+    def forward(self, tup):
+        x = tup[0]
         residual = x
 
         out = self.conv1(x)
@@ -37,7 +39,7 @@ class BasicBlock(nn.Module):
             residual = self.downsample(x)
             
         # if no downsampling involved and the index matches 
-        if self.downsample is None and self.index in drop:
+        if tup[1] is not None and self.index in tup[1]:
            # only keep the shortcut path
             print("skip connections", self.index)
             out = residual 
@@ -46,7 +48,7 @@ class BasicBlock(nn.Module):
             
         out = self.relu(out)
 
-        return out,drop
+        return [out,tup[1]]
 
 class ResNet(nn.Module):
 
@@ -95,18 +97,22 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         #generate random index of blocks in each layer to skip the connection
-        print("committee is ", committee)
+        #print("committee is ", committee)
         if committee == True:
             #skip the downsample block
             #drop three blocks at each resolution 
-            drop = torch.randint(1, self.num_block, (3,))
-            print("blocks to drop", drop)
+            drop1 =  random.sample(range(1,self.num_block),3)
+            drop2 =  random.sample(range(1,self.num_block),3)
+            drop3 =  random.sample(range(1,self.num_block),3)
+            print("blocks to drop", drop1,drop2,drop3)
         else:
-            drop = None
+            drop1 = None
+            drop2 = None
+            drop3 = None
             
-        x,drop = self.layer1(x,drop)
-        x,drop = self.layer2(x,drop)
-        x,drop = self.layer3(x,drop)
+        x, _ = self.layer1([x,drop1])
+        x, _ = self.layer2([x,drop2])
+        x, _ = self.layer3([x,drop3])
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
