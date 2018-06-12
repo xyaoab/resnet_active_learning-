@@ -8,31 +8,24 @@ import gpytorch
 from acquisition_function import DiscreteAcquisitionFunction
 from torch.distributions.normal import Normal
 
-class DiscreteMES(DiscreteAcquisitionFunction):
+class DiscreteEI(DiscreteAcquisitionFunction):
     
-    def __init__(self, GPModel, nK=100):
-        self.nK = nK
-        super(DiscreteMES,self).__init__(GPModel)
+    def __init__(self, GPModel, train_y):
+        super(DiscreteEI,self).__init__(GPModel)
+        self.train_ouput = train_y
         
     def forward(self, candidate_set):
-
         if not torch.is_tensor(candidate_set):
             raise RuntimeError("Candidate set must be a tensor")
 
         with gpytorch.beta_features.fast_pred_var(), gpytorch.beta_features.fast_pred_samples():
             observed_pred = self.model(candidate_set)
-            f_samples = observed_pred.sample(self.nK)
-            y_star_sample = f_samples.max(dim=0)
-            y_max = y_star_sample[0].repeat(candidate_set.size()[0],1).t()
-
             mean = observed_pred.mean()
             std = torch.sqrt(observed_pred.var())
 
-            gamma = (y_max - mean ) / std
-            acq_func =  gamma * Normal(0,1).log_prob(gamma).exp() \
-            / (2 *  Normal(0,1).cdf(gamma)) - torch.log(Normal(0,1).cdf(gamma))
-
-            acq_func = acq_func.sum(dim =0) / self.nK
+            y_max = torch.max(self.train_ouput)
+            z = (mean - y_max) / std
+            acq_func = (mean - y_max) * Normal(0,1).cdf(z) + std * Normal(0,1).log_prob(z).exp() 
             next_point = candidate_set[torch.argmax(acq_func)].view(1)
-            return acq_func,next_point
+        return acq_func, next_point
 
