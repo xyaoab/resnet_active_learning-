@@ -33,6 +33,6 @@ class DiscreteMES(DiscreteAcquisitionFunction):
             / (2 *  Normal(0,1).cdf(gamma)) - torch.log(Normal(0,1).cdf(gamma))
 
             acq_func = acq_func.sum(dim =0) / self.nK
-            next_point = candidate_set[torch.argmax(acq_func)].view(1)
-        return acq_func,next_point
+            next_point = candidate_set[torch.argmax(acq_func)].view(1,1)
+        return acq_func,next_point, observed_pred
 

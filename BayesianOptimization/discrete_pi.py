@@ -10,9 +10,9 @@ from torch.distributions.normal import Normal
 
 class DiscretePI(DiscreteAcquisitionFunction):
     
-    def __init__(self, GPModel, train_y):
+    def __init__(self, GPModel):
         super(DiscretePI,self).__init__(GPModel)
-        self.train_ouput = train_y
+        self.train_ouput = self.model.train_targets
         
     def forward(self, candidate_set):
         if not torch.is_tensor(candidate_set):
@@ -26,6 +26,6 @@ class DiscretePI(DiscreteAcquisitionFunction):
             y_max = torch.max(self.train_ouput)
             z = (mean - y_max) / std
             acq_func = Normal(0,1).cdf(z) 
-            next_point = candidate_set[torch.argmax(acq_func)].view(1)
-        return acq_func, next_point
+            next_point = candidate_set[torch.argmax(acq_func)].view(1,1)
+        return acq_func, next_point, observed_pred 
 

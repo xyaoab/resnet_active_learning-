@@ -22,7 +22,7 @@ class DiscreteUCB(DiscreteAcquisitionFunction):
             mean = observed_pred.mean()
             std = torch.sqrt(observed_pred.var())
             acq_func = mean + self.kappa * std 
-            next_point = candidate_set[torch.argmax(acq_func)].view(1)
+            next_point = candidate_set[torch.argmax(acq_func)].view(1,1)
             
-        return acq_func, next_point
+        return acq_func, next_point, observed_pred
 
