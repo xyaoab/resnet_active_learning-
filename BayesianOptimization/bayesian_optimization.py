@@ -15,11 +15,12 @@ from discrete_ei import DiscreteEI
 from discrete_ucb import DiscreteUCB
 from discrete_pi import DiscretePI
 from dimension import Dimension
+from torch.autograd import Variable
 
 from matplotlib import pyplot as plt
 from matplotlib import gridspec
 
-# helper function: plotting gp 
+# helper function: plotting gp for 1D
 def plot_gp(train_x, train_y, x, y, rand_var=None, model=False, acq = None, bo=False):
     fig = plt.figure(figsize=(5,10))
     gs = gridspec.GridSpec(2,1,height_ratios=[2, 1]) 
@@ -30,8 +31,8 @@ def plot_gp(train_x, train_y, x, y, rand_var=None, model=False, acq = None, bo=F
     # if model is trained 
     if model == True:
         lower, upper = rand_var.confidence_region()
-        mean = rand_var.mean().data.numpy()
-        var = rand_var.var().data.numpy()
+        mean = rand_var.mean().cpu().data.numpy()
+        var = rand_var.var().cpu().data.numpy()
         axis.plot(x, mean, '--', color='k', label='Prediction')
        # axis.fill_between(x, lower.data.numpy(), upper.data.numpy(), alpha=.6, label='95% confidence interval')
         axis.fill_between(x, y - 1.96 * var , y + 1.96 * var, alpha=.3, label='95% confidence interval')
@@ -39,8 +40,8 @@ def plot_gp(train_x, train_y, x, y, rand_var=None, model=False, acq = None, bo=F
     # if acqusition function is available
     if bo == True:
         acqusition = plt.subplot(gs[1])
-        acqusition.plot(x, acq.data.numpy(), label='Utility Function', color='purple')
-        acqusition.plot(x[torch.argmax(acq)], torch.max(acq).data.numpy(), '*', markersize=15, 
+        acqusition.plot(x, acq.data.cpu().numpy(), label='Utility Function', color='purple')
+        acqusition.plot(x[torch.argmax(acq)], torch.max(acq).data.cpu().numpy(), '*', markersize=15, 
              label=u'Next Best Guess', markerfacecolor='gold', markeredgecolor='k', markeredgewidth=1)
         acqusition.legend(loc=2, bbox_to_anchor=(1.01, 1), borderaxespad=0.)
     
@@ -61,8 +62,9 @@ class BayesianOptimization(Module):
 
         #check trained model
         for param in GPModel.parameters():
-            assert param.grad is not None 
-            assert param.grad.norm().item()> 0
+            if param.grad is not None and param.grad.norm().item() == 0:
+                raise RuntimeError("Model is not trained")
+        
         if not isinstance(likelihood, GaussianLikelihood):
             raise RuntimeError("BayesianOptimization can only handle GaussianLikelihood")
    
@@ -81,28 +83,26 @@ class BayesianOptimization(Module):
         #negative wrapper to maximize the target function
         self.function = lambda x: -1*target(x)
         
-        self._x_samples = Dimension(search_space).get_samples
-        self._y_samples = self.function(self._x_samples)
+        self._x_samples = Dimension(search_space).get_samples.cuda()
+        self._y_samples = Variable(self.function(self._x_samples)).cuda()
 
 
         
     def update_model(self, next_point):
-        #print("self.model.train_inputs",self.model.train_inputs[0])
-        #print("next_point",next_point)
-        train_x = Variable(torch.cat((self.model.train_inputs[0], next_point)))
-        train_targets = Variable(torch.cat((self.model.train_targets, self.function(next_point).view(-1))))
+        train_x = Variable(torch.cat((self.model.train_inputs[0], next_point))).cuda()
+        train_targets = Variable(torch.cat((self.model.train_targets, self.function(next_point).view(-1)))).cuda()
         train_inputs = tuple(tri.unsqueeze(-1) if tri.ndimension() == 1 else tri for tri in (train_x,))
         self.model.set_train_data(train_inputs, train_targets, strict=False)
         
         self.model.train()
         self.likelihood.train()
-        
+        print("after: self.model.train_inputs",self.model.train_inputs[0])
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(self.likelihood, self.model)
         self.optimizer = torch.optim.Adam([
             {'params': self.model.parameters()},  # Includes GaussianLikelihood parameters
             ], lr=0.1)
 
-        training_iter = 20
+        training_iter = 10
         for i in range(training_iter):
             # Zero gradients from previous iteration
             self.optimizer.zero_grad()
@@ -111,19 +111,14 @@ class BayesianOptimization(Module):
             # Calc loss and backprop gradients
             loss = -mll(output, train_targets)
             loss.backward()
-            
-            print('Iter %d/%d - Loss: %.3f   log_lengthscale: %.3f   log_noise: %.3f' % (
-                i + 1, training_iter, loss.data[0],
-                self.model.covar_module.log_lengthscale.data[0, 0],
-                self.model.likelihood.log_noise.data[0]
-            ))
-            
+            print('Iter %d/%d - Loss: %.3f' % (i + 1, training_iter, loss.data[0]))
+  
             self.optimizer.step()
 
         
     def step(self,plot=False):
         if self.acq_func == "discrete_mes":
-            nK = self.acq_func_kwargs.get("nK", 100)
+            nK = self.acq_func_kwargs.get("nK", 500)
             self.acq_func = DiscreteMES(self.model, nK)
         elif self.acq_func == "discrete_ei":
             self.acq_func = DiscreteEI(self.model)
@@ -137,10 +132,10 @@ class BayesianOptimization(Module):
         self.likelihood.eval()
         acq, next_point, observed_pred = self.acq_func(self._x_samples)
         if plot:
-            plot_gp(self.model.train_inputs[0].view(-1).numpy(), 
-                    self.model.train_targets.view(-1).numpy(), 
-                    self._x_samples.view(-1).numpy(), 
-                    self._y_samples.view(-1).numpy(), 
+            plot_gp(self.model.train_inputs[0].view(-1).cpu().numpy(), 
+                    self.model.train_targets.view(-1).cpu().numpy(), 
+                    self._x_samples.view(-1).cpu().numpy(), 
+                    self._y_samples.view(-1).cpu().numpy(), 
                     observed_pred, True, acq, True)
 
         return next_point

@@ -24,7 +24,7 @@ class DiscretePI(DiscreteAcquisitionFunction):
             std = torch.sqrt(observed_pred.var())
 
             y_max = torch.max(self.train_ouput)
-            z = (mean - y_max) / std
+            z = ((mean - y_max) / std).cpu()
             acq_func = Normal(0,1).cdf(z) 
             next_point = candidate_set[torch.argmax(acq_func)].view(1,1)
         return acq_func, next_point, observed_pred 

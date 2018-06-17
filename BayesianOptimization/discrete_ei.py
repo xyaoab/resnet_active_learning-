@@ -24,8 +24,8 @@ class DiscreteEI(DiscreteAcquisitionFunction):
             std = torch.sqrt(observed_pred.var())
 
             y_max = torch.max(self.train_ouput)
-            z = (mean - y_max) / std
-            acq_func = (mean - y_max) * Normal(0,1).cdf(z) + std * Normal(0,1).log_prob(z).exp() 
+            z = ((mean - y_max) / std ).cpu()
+            acq_func = (mean - y_max).cpu() * Normal(0,1).cdf(z) + std.cpu() * Normal(0,1).log_prob(z).exp() 
             next_point = candidate_set[torch.argmax(acq_func)].view(1,1)
         return acq_func, next_point, observed_pred
 

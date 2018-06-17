@@ -6,6 +6,7 @@ from __future__ import unicode_literals
 
 import torch
 import itertools
+from torch.autograd import Variable
 
 class Space():
     def __init__(self):
@@ -57,7 +58,7 @@ class Dimension():
         for e in itertools.product(*D):
             e = torch.stack(e)
             self.candidate_set.append(e)
-        self.candidate_set = torch.stack(self.candidate_set)
+        self.candidate_set = Variable(torch.stack(self.candidate_set)).cuda()
     
     @property
     def get_samples(self):

@@ -41,7 +41,7 @@ class BasicBlock(nn.Module):
         # if no downsampling involved and the index matches 
         if tup[1] is not None and self.index in tup[1]:
            # only keep the shortcut path
-            print("skip connections", self.index)
+            #print("skip connections", self.index)
             out = residual 
         else:
             out += residual

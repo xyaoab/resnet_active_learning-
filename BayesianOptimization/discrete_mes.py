@@ -27,8 +27,8 @@ class DiscreteMES(DiscreteAcquisitionFunction):
 
             mean = observed_pred.mean()
             std = torch.sqrt(observed_pred.var())
-
-            gamma = (y_max - mean ) / std
+            #TODO: keep gamma in gpu 
+            gamma = ((y_max - mean ) / std).cpu()
             acq_func =  gamma * Normal(0,1).log_prob(gamma).exp() \
             / (2 *  Normal(0,1).cdf(gamma)) - torch.log(Normal(0,1).cdf(gamma))
 
