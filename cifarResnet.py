@@ -101,10 +101,10 @@ class ResNet(nn.Module):
         if committee == True:
             #skip the downsample block
             #drop three blocks at each resolution 
-            drop1 =  random.sample(range(1,self.num_block),3)
-            drop2 =  random.sample(range(1,self.num_block),3)
+            drop1 =  random.sample(range(1,self.num_block),1)
+            drop2 =  random.sample(range(1,self.num_block),2)
             drop3 =  random.sample(range(1,self.num_block),3)
-            print("blocks to drop", drop1,drop2,drop3)
+            print("blocks to drop", drop1, drop2, drop3)
         else:
             drop1 = None
             drop2 = None
